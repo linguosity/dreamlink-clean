@@ -1,0 +1,14 @@
+Please analyze these build/lint/type errors from my Next.js TypeScript project and provide specific fixes.
+
+For each error:
+1. Identify the exact file and line number
+2. Explain the root cause briefly
+3. Provide the exact code I should use to fix the issue
+4. If multiple files need changes, provide all necessary changes
+
+Focus on practical solutions that I can implement immediately. Use code blocks for all code fixes.
+
+The errors are from a Next.js app with Supabase authentication, using TypeScript and React.
+
+Errors:
+

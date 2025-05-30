@@ -1,0 +1,7 @@
+# Production environment variables
+
+# Enable search features
+NEXT_PUBLIC_FEATURE_CLIENT_SEARCH=true
+
+# Disable server-side search for now
+NEXT_PUBLIC_FEATURE_SERVER_SEARCH=false
