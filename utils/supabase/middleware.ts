@@ -71,14 +71,18 @@ export async function updateSession(request: NextRequest) {
     const errorMessage = e instanceof Error ? e.message : String(e)
     const isExpiredToken = errorMessage.includes('JWT') || errorMessage.includes('expired') || errorMessage.includes('token')
     
+    // Clear expired auth cookies to prevent auth state mismatch
+    if (isExpiredToken) {
+      response.cookies.set('sb-access-token', '', { maxAge: 0 })
+      response.cookies.set('sb-refresh-token', '', { maxAge: 0 })
+      // Also clear any Supabase session cookies
+      response.cookies.set('supabase-auth-token', '', { maxAge: 0 })
+      response.cookies.set('supabase.auth.token', '', { maxAge: 0 })
+    }
+    
     // Handle protected routes and root page on error
     if (request.nextUrl.pathname.startsWith('/protected') || 
         request.nextUrl.pathname === '/') {
-      // Clear the old session cookies if it's an expired token
-      if (isExpiredToken) {
-        response.cookies.set('sb-access-token', '', { maxAge: 0 })
-        response.cookies.set('sb-refresh-token', '', { maxAge: 0 })
-      }
       return NextResponse.redirect(new URL('/sign-in', request.url))
     }
     

@@ -1,79 +1,229 @@
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 
-export const runtime = "edge";
+const BFL_API_URL = "https://api.us1.bfl.ai/v1/flux-pro-1.1";
+const BFL_API_KEY = process.env.BFL_API_KEY;
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     console.log("🎨 Image generation API: Request received");
     
-    const { dreamId, dreamContent, title } = await request.json();
+    // Check if API key is configured
+    if (!BFL_API_KEY) {
+      return NextResponse.json(
+        { error: "Image generation service not configured" },
+        { status: 503 }
+      );
+    }
+
+    // Get user and check authentication
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // TODO: Re-enable subscription check after testing
+    /*
+    // Check user's subscription tier
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (profileError) {
+      console.error("Error fetching profile:", profileError);
+      return NextResponse.json(
+        { error: "Failed to verify subscription" },
+        { status: 500 }
+      );
+    }
+
+    // Check if user has access to image generation
+    const subscriptionTier = profile?.subscription_tier || 'free';
+    if (subscriptionTier === 'free') {
+      return NextResponse.json(
+        { error: "Image generation is available for paid subscribers only" },
+        { status: 403 }
+      );
+    }
+    */
+
+    // Get request body
+    const body = await request.json();
+    const { dreamId, dreamContent, title, width = 1024, height = 768 } = body;
+
     if (!dreamId || !dreamContent) {
-      return NextResponse.json({ error: "Dream ID and content are required" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Dream ID and content are required" },
+        { status: 400 }
+      );
     }
 
     // Create a prompt for image generation based on the dream content
-    const imagePrompt = `Create a beautiful, artistic representation of this dream: "${dreamContent}". Style: dreamy, surreal, spiritual, with soft colors and ethereal lighting. Avoid text or words in the image.`;
+    const imagePrompt = `${dreamContent} in the style of a sketched minimalist graphic illustration, flat vector image, simple thin line drawing`;
 
     console.log(`🎨 Generating image for dream: ${dreamId}`);
     console.log(`🎨 Prompt: ${imagePrompt.substring(0, 100)}...`);
 
-    // Get user ID for the request
-    const supabase = await createClient();
-    const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
-    if (userError || !user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 });
-    }
-
-    // Generate image using the corrected OpenAI API format
-    const response = await openai.images.generate({
-      model: "gpt-image-1",
-      prompt: imagePrompt.trim(),
-      n: 1,
-      size: "1024x1024",
-      user: `user-${user.id}`
+    // Make request to BlackForestLab API
+    const bflResponse = await fetch(BFL_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Key': BFL_API_KEY
+      },
+      body: JSON.stringify({
+        prompt: imagePrompt.trim(),
+        width,
+        height,
+        prompt_upsampling: true,
+        safety_tolerance: 2,
+        output_format: 'jpeg'
+      })
     });
 
-    if (!response.data || response.data.length === 0) {
-      console.error("❌ No image data received from OpenAI");
-      return NextResponse.json({ error: "Failed to generate image" }, { status: 500 });
+    if (!bflResponse.ok) {
+      const error = await bflResponse.text();
+      console.error("BFL API error:", error);
+      return NextResponse.json(
+        { error: "Failed to generate image" },
+        { status: bflResponse.status }
+      );
     }
 
-    const imageUrl = response.data[0].url;
-    console.log(`🎨 Image generated successfully: ${imageUrl}`);
+    const result = await bflResponse.json();
+    console.log("🎨 BFL API response:", result);
 
-    // Update the dream entry with the generated image URL
-    
-    const { error: updateError } = await supabase
-      .from('dream_entries')
-      .update({ image_url: imageUrl })
-      .eq('id', dreamId);
+    // TODO: Uncomment after creating image_generations table
+    /*
+    // Store the generation request in database
+    const { data: generation, error: insertError } = await supabase
+      .from('image_generations')
+      .insert({
+        user_id: user.id,
+        dream_id: dreamId,
+        prompt: imagePrompt,
+        status: 'pending',
+        request_id: result.id,
+        polling_url: result.polling_url || `https://api.us1.bfl.ai/v1/get_result?id=${result.id}`
+      })
+      .select()
+      .single();
 
-    if (updateError) {
-      console.error("❌ Error updating dream with image URL:", updateError);
-      return NextResponse.json({ error: "Failed to save image URL" }, { status: 500 });
+    if (insertError) {
+      console.error("Error storing generation request:", insertError);
     }
-
-    console.log(`🎨 Dream entry updated with image URL`);
+    */
 
     return NextResponse.json({
       success: true,
-      imageUrl: imageUrl,
+      requestId: result.id,
+      pollingUrl: result.polling_url || `/api/generate-image/status?id=${result.id}`,
       dreamId: dreamId
     });
-
   } catch (error) {
     console.error("❌ Error in image generation API:", error);
-    return NextResponse.json({ 
-      error: "Failed to generate image", 
-      details: error instanceof Error ? error.message : "Unknown error" 
-    }, { status: 500 });
+    return NextResponse.json(
+      { 
+        error: "Failed to generate image", 
+        details: error instanceof Error ? error.message : "Unknown error" 
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Polling endpoint to check image generation status
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const requestId = searchParams.get('id');
+    
+    if (!requestId) {
+      return NextResponse.json(
+        { error: "Request ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if API key is configured
+    if (!BFL_API_KEY) {
+      return NextResponse.json(
+        { error: "Image generation service not configured" },
+        { status: 503 }
+      );
+    }
+
+    // Get user and check authentication
+    const supabase = await createClient();
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    // Poll the BFL API for status
+    const pollingUrl = `https://api.us1.bfl.ai/v1/get_result?id=${requestId}`;
+    const bflResponse = await fetch(pollingUrl, {
+      headers: {
+        'X-Key': BFL_API_KEY
+      }
+    });
+
+    if (!bflResponse.ok) {
+      const error = await bflResponse.text();
+      console.error("BFL polling error:", error);
+      return NextResponse.json(
+        { error: "Failed to check image status" },
+        { status: bflResponse.status }
+      );
+    }
+
+    const result = await bflResponse.json();
+    console.log("🎨 Polling result:", JSON.stringify(result, null, 2));
+    
+    // If the image is ready and we have a result (check both cases)
+    if ((result.status === 'ready' || result.status === 'Ready') && result.result && result.result.sample) {
+      const imageUrl = result.result.sample;
+      
+      // Update the dream entry with the generated image URL
+      const { error: updateError } = await supabase
+        .from('dream_entries')
+        .update({ image_url: imageUrl })
+        .eq('id', searchParams.get('dreamId'));
+
+      if (updateError) {
+        console.error("Error updating dream with image URL:", updateError);
+      }
+
+      // TODO: Uncomment after creating image_generations table
+      /*
+      // Update the image generation record
+      await supabase
+        .from('image_generations')
+        .update({ 
+          status: 'completed',
+          image_url: imageUrl 
+        })
+        .eq('request_id', requestId);
+      */
+    }
+
+    return NextResponse.json(result);
+  } catch (error) {
+    console.error("Polling error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500 }
+    );
   }
 }

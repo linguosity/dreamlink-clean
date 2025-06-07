@@ -58,12 +58,12 @@ export default function CompactDreamInput({ userId }: CompactDreamInputProps) {
     setDialogOpen(false);
   };
 
-  // Common submission logic
-  const submitDream = async (dreamText: string) => {
+  // Common submission logic with retry for auth timing issues
+  const submitDream = async (dreamText: string, retryCount = 0) => {
     setIsSubmitting(true);
     
     try {
-      console.log("Submitting dream to API with user ID:", userId);
+      console.log(`Submitting dream to API (attempt ${retryCount + 1}) with user ID:`, userId);
       
       const response = await fetch("/api/dream-entries", {
         method: "POST",
@@ -72,7 +72,7 @@ export default function CompactDreamInput({ userId }: CompactDreamInputProps) {
         },
         body: JSON.stringify({
           dream_text: dreamText,
-          user_id: userId,
+          // Remove user_id from request body - let server determine auth
         }),
       });
 
@@ -90,8 +90,26 @@ export default function CompactDreamInput({ userId }: CompactDreamInputProps) {
         throw new Error("Invalid API response format");
       }
 
+      // Handle 401 auth errors with retry logic
+      if (response.status === 401 && retryCount < 2) {
+        console.log(`Auth error on attempt ${retryCount + 1}, retrying after delay...`);
+        
+        // Wait a bit for auth state to sync
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Recursive retry
+        setIsSubmitting(false); // Reset loading state temporarily
+        return await submitDream(dreamText, retryCount + 1);
+      }
+
       if (!response.ok) {
         console.error("API error details:", result);
+        
+        // Special handling for auth errors
+        if (response.status === 401) {
+          throw new Error("Authentication error. Please try refreshing the page and logging in again.");
+        }
+        
         throw new Error(result.error || "Failed to submit dream");
       }
       
@@ -106,7 +124,14 @@ export default function CompactDreamInput({ userId }: CompactDreamInputProps) {
     } catch (error: unknown) {
       const err = error instanceof Error ? error : new Error(String(error));
       console.error("Error submitting dream:", err);
-      alert(`Failed to submit your dream: ${err.message || "Unknown error"}. Please try again.`);
+      
+      // More user-friendly error messages
+      let userMessage = err.message;
+      if (err.message.includes('401') || err.message.includes('Unauthorized')) {
+        userMessage = "Please wait a moment and try again. If the issue persists, try refreshing the page.";
+      }
+      
+      alert(`Failed to submit your dream: ${userMessage}`);
     } finally {
       setIsSubmitting(false);
     }

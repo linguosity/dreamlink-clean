@@ -24,7 +24,7 @@ import { useRouter } from "next/navigation";
 import dynamic from 'next/dynamic';
 import { cn } from "@/lib/utils";
 import { highlightMatches } from "@/utils/highlight";
-import { usePreferences } from "@/context/preferences-context";
+import { toast } from "sonner";
 
 // Instead of direct import, use fallback icon components
 const MessageSquareIcon = ({ className }: { className?: string }) => (
@@ -130,9 +130,24 @@ const ShareIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const StarIcon = ({ className, filled }: { className?: string; filled?: boolean }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill={filled ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" />
+const ImageIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <polyline points="21 15 16 10 5 21" />
+  </svg>
+);
+
+const LoaderIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className + " animate-spin"}>
+    <line x1="12" y1="2" x2="12" y2="6" />
+    <line x1="12" y1="18" x2="12" y2="22" />
+    <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
+    <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
+    <line x1="2" y1="12" x2="6" y2="12" />
+    <line x1="18" y1="12" x2="22" y2="12" />
+    <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
+    <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
   </svg>
 );
 
@@ -322,6 +337,7 @@ type DreamEntryProps = {
     tags?: string[];
     bible_refs?: string[];
     created_at?: string;
+    image_url?: string;
   };
 };
 
@@ -350,8 +366,9 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
   const [isMounted, setIsMounted] = useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(dream.image_url || null);
-  const [showImage, setShowImage] = useState(!!dream.image_url);
-  const { preferences } = usePreferences();
+  const [imageRequestId, setImageRequestId] = useState<string | null>(null);
+  // TODO: Re-enable subscription check after testing
+  const [userSubscriptionTier, setUserSubscriptionTier] = useState<string>('pro');
 
   // Ensure client-side hydration
   useEffect(() => {
@@ -698,7 +715,10 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
             console.error("API error response:", await response.text());
           }
         } catch (error) {
-          console.error("Error fetching Bible verses:", error);
+          // Only log error if it's not a connection refused error (which happens when dev server is restarting)
+          if (error instanceof Error && !error.message.includes('Failed to fetch')) {
+            console.error("Error fetching Bible verses:", error);
+          }
         }
       };
       
@@ -718,48 +738,6 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
     }
   }, [isOpen, dream]);
 
-  // Handle image generation
-  const handleGenerateImage = async (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent opening the dialog
-    
-    if (isGeneratingImage || empty) return;
-    
-    setIsGeneratingImage(true);
-    
-    try {
-      const response = await fetch('/api/generate-image', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          dreamId: dream.id,
-          dreamContent: dream.original_text,
-          title: dream.title
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate image');
-      }
-      
-      const data = await response.json();
-      
-      if (data.success && data.imageUrl) {
-        setGeneratedImageUrl(data.imageUrl);
-        setShowImage(true);
-      } else {
-        throw new Error(data.error || 'Failed to generate image');
-      }
-      
-    } catch (error) {
-      console.error('Error generating image:', error);
-      alert('Failed to generate image. Please try again.');
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
-  
   // Handle card click to show dialog
   const handleCardClick = () => {
     // Always open dialog, even for placeholder/example dreams
@@ -769,28 +747,90 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
   // Handle delete dream
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // For now, we'll check subscription status when attempting to generate
+  // In a real app, this would come from user context or profile data
+  
+  // Handle image generation
+  const handleGenerateImage = async () => {
+    if (empty) return; // Only check if it's an empty/example dream
+    
+    setIsGeneratingImage(true);
+    
+    try {
+      // Submit image generation request
+      const response = await fetch('/api/generate-image', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          dreamId: dream.id,
+          dreamContent: dream.original_text,
+          title: dream.title,
+        }),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to generate image');
+      }
+      
+      const result = await response.json();
+      setImageRequestId(result.requestId);
+      
+      // Start polling for the result
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/generate-image?id=${result.requestId}&dreamId=${dream.id}`);
+          if (statusResponse.ok) {
+            const statusData = await statusResponse.json();
+            
+            if ((statusData.status === 'ready' || statusData.status === 'Ready') && statusData.result?.sample) {
+              setGeneratedImageUrl(statusData.result.sample);
+              setDream({ ...dream, image_url: statusData.result.sample });
+              clearInterval(pollInterval);
+              setIsGeneratingImage(false);
+              toast.success('Dream image generated successfully!');
+            } else if (statusData.status === 'failed') {
+              clearInterval(pollInterval);
+              setIsGeneratingImage(false);
+              toast.error('Failed to generate image. Please try again.');
+            }
+          }
+        } catch (error) {
+          console.error('Polling error:', error);
+        }
+      }, 2000); // Poll every 2 seconds
+      
+      // Stop polling after 2 minutes
+      setTimeout(() => {
+        clearInterval(pollInterval);
+        if (isGeneratingImage) {
+          setIsGeneratingImage(false);
+          toast.error('Image generation timed out. Please try again.');
+        }
+      }, 120000);
+      
+    } catch (error) {
+      console.error('Error generating image:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to generate image');
+      setIsGeneratingImage(false);
+    }
+  };
+  
   const handleDeleteDream = async () => {
     if (empty) return; // Don't allow deleting example dreams
     
     setIsDeleting(true);
     
     try {
-      console.log('Attempting to delete dream:', dream.id);
       const response = await fetch(`/api/dream-entries?id=${dream.id}`, {
         method: 'DELETE',
       });
       
-      console.log('Delete response status:', response.status);
-      
       if (!response.ok) {
-        // Get the error details from the response
-        const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-        console.error('Delete API error:', errorData);
-        throw new Error(errorData.error || `Failed to delete dream (status: ${response.status})`);
+        throw new Error('Failed to delete dream');
       }
-      
-      const result = await response.json();
-      console.log('Delete successful:', result);
       
       // Close the dialog and refresh the page
       setIsOpen(false);
@@ -798,8 +838,7 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
       
     } catch (error) {
       console.error('Error deleting dream:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete this dream. Please try again.';
-      alert(errorMessage);
+      alert('Failed to delete this dream. Please try again.');
     } finally {
       setIsDeleting(false);
     }
@@ -947,83 +986,15 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
                 }
               </div>
             </CardTitle>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center text-xs text-muted-foreground flex-shrink-0">
-                <CalendarIcon className="h-3 w-3 mr-1" />
-                <span className="whitespace-nowrap">{formattedDate}</span>
-              </div>
-              {!empty && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        onClick={handleGenerateImage}
-                        disabled={isGeneratingImage}
-                        className="opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
-                        aria-label="Generate cover image"
-                      >
-                        {isGeneratingImage ? (
-                          <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                        ) : (
-                          <StarIcon 
-                            className="h-4 w-4 text-yellow-500 hover:text-yellow-600" 
-                            filled={!!generatedImageUrl}
-                          />
-                        )}
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p className="text-xs">
-                        {generatedImageUrl ? 'Regenerate cover image' : 'Generate cover image'}
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
+            <div className="flex items-center text-xs text-muted-foreground flex-shrink-0">
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              <span className="whitespace-nowrap">{formattedDate}</span>
             </div>
           </div>
         </CardHeader>
         
-        <CardContent className="p-3 pt-1 space-y-2 relative overflow-hidden">
-          {/* Generated Image Overlay */}
-          {generatedImageUrl && showImage && preferences.showCoverImages && (
-            <div 
-              className={`absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-500 ease-in-out ${
-                showImage ? 'translate-x-0' : 'translate-x-full'
-              }`}
-              style={{ backgroundImage: `url(${generatedImageUrl})` }}
-            >
-              <div className="absolute inset-0 bg-black/20" />
-              <div className="absolute top-2 right-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowImage(false);
-                  }}
-                  className="bg-black/50 text-white rounded-full p-1 hover:bg-black/70 transition-colors"
-                  aria-label="Hide image"
-                >
-                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3">
-                <h3 className="text-white text-sm font-medium truncate">
-                  {dream.title}
-                </h3>
-                <p className="text-white/80 text-xs truncate">
-                  {formattedDate}
-                </p>
-              </div>
-            </div>
-          )}
-          
-          {/* Original Content */}
-          <div className={`transition-transform duration-500 ease-in-out ${
-            showImage && preferences.showCoverImages ? '-translate-x-full opacity-0' : 'translate-x-0 opacity-100'
-          }`}>
-            {/* Summary */}
+        <CardContent className="p-3 pt-1 space-y-2">
+          {/* Summary */}
           {(dream.personalized_summary || dream.dream_summary) && (
             <div>
               <p className="text-xs text-muted-foreground leading-4 break-words">
@@ -1059,15 +1030,14 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
             </div>
           )}
           
-            {/* Original text preview (shown only when there's a search match and no summary) */}
-            {searchTerms.length > 0 && !dream.personalized_summary && !dream.dream_summary && (
-              <div className="text-xs text-muted-foreground">
-                {highlightMatches(dream.original_text, searchTerms)}
-              </div>
-            )}
-            
-            {/* Bible References - removed from card view */}
-          </div>
+          {/* Original text preview (shown only when there's a search match and no summary) */}
+          {searchTerms.length > 0 && !dream.personalized_summary && !dream.dream_summary && (
+            <div className="text-xs text-muted-foreground">
+              {highlightMatches(dream.original_text, searchTerms)}
+            </div>
+          )}
+          
+          {/* Bible References - removed from card view */}
         </CardContent>
       </Card>
 
@@ -1093,9 +1063,10 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
             value={activeTab}
             onValueChange={(value: string) => setActiveTab(value)}
           >
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="analysis" className="flex items-center gap-1"><PuzzleIcon className="h-3 w-3" />Analysis</TabsTrigger>
               <TabsTrigger value="original">Original Dream</TabsTrigger>
+              <TabsTrigger value="image" className="flex items-center gap-1"><ImageIcon className="h-3 w-3" />Image</TabsTrigger>
             </TabsList>
             
             <div style={{ minHeight: modalHeight ? `${modalHeight}px` : 'auto' }}>
@@ -1141,6 +1112,70 @@ export default function DreamCard({ empty, loading: initialLoading, dream: initi
                     ? highlightMatches(dream.original_text, searchTerms)
                     : dream.original_text
                   }
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="image" className="space-y-4 p-1">
+                <div className="flex flex-col items-center space-y-4">
+                  {generatedImageUrl ? (
+                    <>
+                      <img 
+                        src={generatedImageUrl} 
+                        alt="Generated dream visualization" 
+                        className="w-full max-w-md rounded-lg shadow-lg"
+                      />
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleGenerateImage}
+                        disabled={isGeneratingImage}
+                      >
+                        {isGeneratingImage ? (
+                          <>
+                            <LoaderIcon className="h-4 w-4 mr-2" />
+                            Regenerating...
+                          </>
+                        ) : (
+                          <>Regenerate Image</>
+                        )}
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-center">
+                      <div className="mb-4 p-6 bg-muted rounded-lg">
+                        <ImageIcon className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          {userSubscriptionTier === 'free' ? (
+                            "Image generation is available for paid subscribers only."
+                          ) : (
+                            "Generate a visual representation of your dream using AI."
+                          )}
+                        </p>
+                      </div>
+                      <Button
+                        onClick={handleGenerateImage}
+                        disabled={isGeneratingImage || userSubscriptionTier === 'free'}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                      >
+                        {isGeneratingImage ? (
+                          <>
+                            <LoaderIcon className="h-4 w-4 mr-2" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="h-4 w-4 mr-2" />
+                            Generate Dream Image
+                          </>
+                        )}
+                      </Button>
+                      {userSubscriptionTier === 'free' && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          <a href="/pricing" className="underline">Upgrade to Pro</a> to unlock image generation
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               </TabsContent>
             </div>

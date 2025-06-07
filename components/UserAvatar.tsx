@@ -67,7 +67,7 @@ export default function UserAvatar({ size = 'md' }: UserAvatarProps) {
               .from('profiles')
               .select('subscription_tier')
               .eq('id', data.user.id)
-              .single();
+              .maybeSingle();
             
             if (profileError) {
               console.log("Profile data not found, using default tier");

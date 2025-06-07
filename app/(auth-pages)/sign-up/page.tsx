@@ -48,7 +48,7 @@ export default function Signup() {
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full min-h-[500px]">
       <CardHeader>
         <CardTitle className="text-2xl">Create your account</CardTitle>
         <CardDescription>
@@ -100,18 +100,6 @@ export default function Signup() {
             </Link>
           </p>
           
-          <div className="p-3 bg-muted/30 rounded-lg border border-primary/20">
-            <p className="text-xs text-muted-foreground mb-2">
-              🌟 Start with our free plan or explore premium features
-            </p>
-            <Link 
-              href="/pricing"
-              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
-            >
-              View Pricing Plans
-              <span className="text-xs">→</span>
-            </Link>
-          </div>
         </div>
         <SmtpMessage />
       </CardFooter>

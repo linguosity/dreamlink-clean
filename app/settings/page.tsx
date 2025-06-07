@@ -13,12 +13,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { ReadingLevel } from '@/schema/profile';
 import { SearchFeatureToggle } from '@/components/SearchFeatureToggle';
-import { usePreferences } from '@/context/preferences-context';
 
 export default function SettingsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const { preferences, updatePreferences } = usePreferences();
+  const [preferences, setPreferences] = useState({
+    emailNotifications: true,
+    darkMode: false,
+    dreamReminders: true,
+    reminderTime: "21:00",
+    biblicalReferences: true,
+    language: "en"
+  });
   const [readingLevel, setReadingLevel] = useState<string>(ReadingLevel.CELESTIAL_INSIGHT);
   const [bibleVersion, setBibleVersion] = useState<string>("KJV");
   const [isSaving, setIsSaving] = useState(false);
@@ -38,7 +44,12 @@ export default function SettingsPage() {
             .eq('id', user.id)
             .single();
           
-          // Preferences are now handled by the PreferencesProvider
+          if (profileData?.preferences) {
+            setPreferences({
+              ...preferences,
+              ...profileData.preferences
+            });
+          }
           
           // Fetch user profile with reading level and Bible version
           const { data: userProfile } = await supabase
@@ -70,7 +81,11 @@ export default function SettingsPage() {
     if (!user) return;
     
     try {
-      // The preferences are automatically saved by the context
+      await supabase
+        .from('profiles')
+        .update({ preferences })
+        .eq('id', user.id);
+        
       toast.success('Preferences saved successfully!');
     } catch (error) {
       console.error('Error saving preferences:', error);
@@ -193,7 +208,7 @@ export default function SettingsPage() {
                 id="emailNotifications" 
                 checked={preferences.emailNotifications}
                 onCheckedChange={(checked) => 
-                  updatePreferences({emailNotifications: checked as boolean})
+                  setPreferences({...preferences, emailNotifications: checked as boolean})
                 }
               />
               <Label htmlFor="emailNotifications">Receive email notifications</Label>
@@ -204,7 +219,7 @@ export default function SettingsPage() {
                 id="dreamReminders" 
                 checked={preferences.dreamReminders}
                 onCheckedChange={(checked) => 
-                  updatePreferences({dreamReminders: checked as boolean})
+                  setPreferences({...preferences, dreamReminders: checked as boolean})
                 }
               />
               <Label htmlFor="dreamReminders">Send daily dream journal reminders</Label>
@@ -218,7 +233,7 @@ export default function SettingsPage() {
                   type="time" 
                   value={preferences.reminderTime}
                   onChange={(e) => 
-                    updatePreferences({reminderTime: e.target.value})
+                    setPreferences({...preferences, reminderTime: e.target.value})
                   }
                 />
               </div>
@@ -229,21 +244,10 @@ export default function SettingsPage() {
                 id="biblicalReferences" 
                 checked={preferences.biblicalReferences}
                 onCheckedChange={(checked) => 
-                  updatePreferences({biblicalReferences: checked as boolean})
+                  setPreferences({...preferences, biblicalReferences: checked as boolean})
                 }
               />
               <Label htmlFor="biblicalReferences">Include biblical references in dream analysis</Label>
-            </div>
-            
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="showCoverImages" 
-                checked={preferences.showCoverImages}
-                onCheckedChange={(checked) => 
-                  updatePreferences({showCoverImages: checked as boolean})
-                }
-              />
-              <Label htmlFor="showCoverImages">Show cover images on dream cards</Label>
             </div>
             
             <div className="space-y-2">
@@ -251,7 +255,7 @@ export default function SettingsPage() {
               <Select 
                 value={preferences.language}
                 onValueChange={(value) => 
-                  updatePreferences({language: value})
+                  setPreferences({...preferences, language: value})
                 }
               >
                 <SelectTrigger id="language">

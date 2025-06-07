@@ -10,6 +10,13 @@ export function useVersionCheck() {
     async function checkVersion() {
       try {
         const res = await fetch("/version.json", { cache: "no-store" });
+        if (!res.ok) {
+          if (res.status === 404) {
+            // Version file doesn't exist yet, silently skip
+            return;
+          }
+          throw new Error(`HTTP error! status: ${res.status}`);
+        }
         const { version } = await res.json();
         
         if (currentVersion.current && currentVersion.current !== version) {
@@ -24,8 +31,10 @@ export function useVersionCheck() {
         }
         currentVersion.current = version;
       } catch (e) {
-        // Ignore network errors
-        console.log("Version check failed:", e);
+        // Only log non-network errors
+        if (e instanceof Error && !e.message.includes('Failed to fetch')) {
+          console.log("Version check failed:", e);
+        }
       }
     }
     

@@ -17,6 +17,7 @@
 - Dream journaling and storage
 - AI-powered dream analysis
 - Biblical citation matching for dream symbolism
+- AI-generated dream visualizations (Pro feature)
 - User profiles with preferences
 - Subscription system with tiered access
 - Cookie-based authentication with Supabase
@@ -52,7 +53,10 @@ cp .env.example .env.local
 ```
 NEXT_PUBLIC_SUPABASE_URL=[INSERT SUPABASE PROJECT URL]
 NEXT_PUBLIC_SUPABASE_ANON_KEY=[INSERT SUPABASE PROJECT API ANON KEY]
+BFL_API_KEY=[INSERT BLACKFORESTLAB API KEY] # For image generation (Pro feature)
 ```
+
+To get a BlackForestLab API key for image generation, visit [docs.bfl.ai/quick-start](https://docs.bfl.ai/quick-start).
 
 4. Run the development server:
 

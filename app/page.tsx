@@ -62,6 +62,10 @@ export default async function MainPage() {
     return redirect("/sign-in");
   }
 
+  // Add a small delay after successful auth to ensure session is fully established
+  // This helps prevent timing issues with subsequent API calls
+  await new Promise(resolve => setTimeout(resolve, 100));
+
   console.log("Home page - Fetching dream entries for user:", user.id);
   
   // Fetch dream entries for the logged in user
@@ -96,19 +100,17 @@ export default async function MainPage() {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div>
               <h3 className="font-bold text-lg mb-3 text-gray-900 dark:text-gray-100">Dreamlink</h3>
-              <p className="text-gray-600 dark:text-gray-300 text-sm">
-                AI-powered dream journaling with biblical insights and dream pattern analysis.
-              </p>
+              
             </div>
             
             <div>
               <h3 className="font-bold text-lg mb-3 text-gray-900 dark:text-gray-100">Quick Links</h3>
               <ul className="space-y-3">
-                <li><Link href="/account" className="text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Account</Link></li>
-                <li><Link href="/settings" className="text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Settings</Link></li>
-                <li><Link href="/help" className="text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Help</Link></li>
-                <li><Link href="/about" className="text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">About</Link></li>
-                <li><Link href="/privacy" className="text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/account" className="no-brand-style text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Account</Link></li>
+                <li><Link href="/settings" className="no-brand-style text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Settings</Link></li>
+                <li><Link href="/help" className="no-brand-style text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Help</Link></li>
+                <li><Link href="/about" className="no-brand-style text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">About</Link></li>
+                <li><Link href="/privacy" className="no-brand-style text-sm font-medium text-gray-800 dark:text-gray-200 hover:text-gray-900 dark:hover:text-white hover:underline transition-colors">Privacy Policy</Link></li>
               </ul>
             </div>
             

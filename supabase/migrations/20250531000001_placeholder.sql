@@ -1,0 +1,2 @@
+-- Placeholder migration file
+-- This migration was already applied remotely

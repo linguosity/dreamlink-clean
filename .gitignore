@@ -41,9 +41,3 @@ yarn-error.log*
 next-env.d.ts
 
 **/.claude/settings.local.json
-
-# Exclude duplicate project directories
-dreamlink2.0/
-dreamlink3.0/
-dreamlink3.0-bad/
-test/

@@ -286,36 +286,19 @@ export async function DELETE(request: Request) {
     }
     
     // Delete related records first (foreign key constraints)
-    console.log(`Starting deletion process for dream ${id}`);
-    
     // Delete bible citations
-    const { error: bibleCitationsError } = await supabase
+    await supabase
       .from("bible_citations")
       .delete()
       .eq("dream_entry_id", id);
       
-    if (bibleCitationsError) {
-      console.error("Error deleting bible citations:", bibleCitationsError);
-      // Continue anyway - this might not exist
-    } else {
-      console.log("Bible citations deleted successfully");
-    }
-      
     // Delete ChatGPT interactions  
-    const { error: chatgptError } = await supabase
+    await supabase
       .from("chatgpt_interactions")
       .delete()
       .eq("dream_entry_id", id);
-      
-    if (chatgptError) {
-      console.error("Error deleting ChatGPT interactions:", chatgptError);
-      // Continue anyway - this might not exist
-    } else {
-      console.log("ChatGPT interactions deleted successfully");
-    }
     
     // Delete the dream entry
-    console.log(`Deleting main dream entry ${id}`);
     const { error: deleteError } = await supabase
       .from("dream_entries")
       .delete()
@@ -324,12 +307,10 @@ export async function DELETE(request: Request) {
     if (deleteError) {
       console.error("Error deleting dream:", deleteError);
       return NextResponse.json(
-        { error: `Failed to delete dream: ${deleteError.message}` },
+        { error: "Failed to delete dream" },
         { status: 500 }
       );
     }
-    
-    console.log(`Dream ${id} deleted successfully`);
     
     return NextResponse.json({
       success: true,
@@ -337,9 +318,8 @@ export async function DELETE(request: Request) {
     });
   } catch (error) {
     console.error("Error processing delete request:", error);
-    const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred";
     return NextResponse.json(
-      { error: `Delete failed: ${errorMessage}` },
+      { error: "An unexpected error occurred" },
       { status: 500 }
     );
   }
