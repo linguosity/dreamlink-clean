@@ -98,7 +98,7 @@ function WaterPlane({ invalidate, scrollY }: WaterPlaneProps) {
   // Animate the water surface and glide camera based on scroll
   useFrame(() => {
     if (waterRef.current) {
-      waterRef.current.material.uniforms['time'].value += 0.0027;
+      waterRef.current.material.uniforms['time'].value += 0.0081;
 
       // Smooth lerp toward the target scroll position (0.06 = gentle easing)
       const target = Math.min(scrollY.current * SCROLL_SPEED, MAX_TRAVEL);
@@ -174,22 +174,10 @@ export function WaterBackground() {
             #cdd8de 30%,
             #b5c4cb 60%,
             #9aacb3 100%)`,
-          animation: 'waterFallbackReveal 1.6s ease-out forwards',
+          opacity: isRevealed ? 1 : 0,
+          transition: 'opacity 1.8s ease-out',
         }}
-      >
-        <style>{`
-          @keyframes waterFallbackReveal {
-            0% {
-              opacity: 0;
-              clip-path: inset(0 0 100% 0);
-            }
-            100% {
-              opacity: 1;
-              clip-path: inset(0 0 0 0);
-            }
-          }
-        `}</style>
-      </div>
+      />
     );
   }
 
@@ -200,8 +188,7 @@ export function WaterBackground() {
       style={{
         filter: 'blur(4px)',
         opacity: isRevealed ? 1 : 0,
-        clipPath: isRevealed ? 'inset(0 0 0 0)' : 'inset(0 0 100% 0)',
-        transition: 'opacity 1.4s ease-out, clip-path 1.6s ease-out',
+        transition: 'opacity 1.8s ease-out',
       }}
     >
       <Canvas

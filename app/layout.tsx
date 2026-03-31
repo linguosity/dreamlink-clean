@@ -12,6 +12,7 @@
 // global styles).
 
 import { Metadata } from "next";
+import { Suspense } from "react";
 import { EnvVarWarning } from "@/components/env-var-warning";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { hasEnvVars } from "@/utils/supabase/check-env-vars";
@@ -23,9 +24,10 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect-error";
 import "./globals.css";
-import Image from 'next/image';
 import { Providers } from './providers';
+import { LazyWaterBackground } from '@/components/LazyWaterBackground';
 import { VersionChecker } from '@/components/VersionChecker';
+import CookieConsent from '@/components/CookieConsent';
 
 // Determine the base URL for metadata and redirects
 const defaultUrl = process.env.VERCEL_URL
@@ -35,19 +37,19 @@ const defaultUrl = process.env.VERCEL_URL
 // ① Next.js Metadata API
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Dreamlink – Dream Journal",
+  title: "DreamRiver – Dream Journal",
   description: "Track and analyze your dreams with AI-powered insights",
   openGraph: {
-    title: "Dreamlink – Dream Journal",
+    title: "DreamRiver – Dream Journal",
     description: "Track and analyze your dreams with AI-powered insights",
     url: defaultUrl,
-    siteName: "Dreamlink",
+    siteName: "DreamRiver",
     locale: "en_US",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Dreamlink – Dream Journal",
+    title: "DreamRiver – Dream Journal",
     description: "Track and analyze your dreams with AI-powered insights",
   },
 };
@@ -90,28 +92,28 @@ export default async function RootLayout({
     console.error("Unexpected auth error in layout:", err);
   }
 
-  // Determine if the current path is an auth‐related page
+  // Determine if the current path is an auth‐related page or landing page
   const headersList = await headers();
   const pathname = headersList.get("x-pathname") || "";
   const isAuthPage =
     pathname.includes("/sign-in") ||
     pathname.includes("/sign-up") ||
     pathname.includes("/forgot-password");
+  const isLandingPage = pathname.includes("/landing");
 
   return (
     <html lang="en" className={geistSans.className} suppressHydrationWarning>
-      <body className="bg-background text-foreground">
-      <div className="fixed inset-0 -z-10">
-        <Image
-          src="/images/background.jpg"
-          alt=""
-          fill
-          className="object-cover object-center blur-[5px]"
-          priority
-        />
-      </div>
+      <body className="text-foreground">
+      <LazyWaterBackground />
         <Providers>
           <VersionChecker />
+          {/* Skip-to-content link for keyboard/screen-reader users */}
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:px-4 focus:py-2 focus:bg-primary focus:text-primary-foreground focus:rounded-md focus:text-sm focus:font-medium focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            Skip to content
+          </a>
           <main className="min-h-screen flex flex-col animate-fade-in">
             {/* Env‐var warning or Navbar */}
             {!hasEnvVars ? (
@@ -120,28 +122,34 @@ export default async function RootLayout({
                   <EnvVarWarning />
                 </div>
               </div>
-            ) : !isAuthPage && user ? (
+            ) : !isAuthPage && !isLandingPage && user ? (
               <Navbar />
             ) : null}
 
             {/* Main content */}
             <div
+              id="main-content"
               className={
                 `flex-1 ` +
-                (!user && !isAuthPage ? "flex items-center justify-center" : "")
+                (!user && !isAuthPage && !isLandingPage ? "flex items-center justify-center" : "")
               }
             >
-              {children}
+              <Suspense fallback={null}>
+                {children}
+              </Suspense>
             </div>
 
             {/* Global toast container */}
             <Toaster />
 
-            {/* Footer only on auth pages */}
+            {/* Cookie consent banner */}
+            <CookieConsent />
+
+            {/* Footer only on auth pages (landing page has its own footer) */}
             {isAuthPage && (
               <footer className="w-full flex items-center justify-between border-t p-4 text-xs">
                 <p className="text-white">
-                  © {new Date().getFullYear()} Dreamlink. All rights reserved.
+                  © {new Date().getFullYear()} DreamRiver. All rights reserved.
                 </p>
                 <div className="flex items-center gap-4">
                   <ThemeSwitcher />
