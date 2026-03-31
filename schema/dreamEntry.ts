@@ -1,8 +1,13 @@
 import { z } from "zod";
+import { readingLevelSchema } from "./profile";
 
-// Basic schema for dream entry creation
+// Basic schema for dream entry creation (matches the POST body from the client)
 export const dreamEntryCreateSchema = z.object({
-  dream_text: z.string().min(1, "Dream text is required"),
+  dream_text: z
+    .string()
+    .min(1, "Dream text is required")
+    .max(8000, "Dream text must be 8,000 characters or fewer"),
+  reading_level: readingLevelSchema.optional(),
   user_id: z.string().uuid().optional(),
 });
 

@@ -4,24 +4,25 @@ import { createClient } from "@/utils/supabase/server";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { encodedRedirect } from "@/utils/utils";
-import { isRedirectError } from "next/dist/client/components/redirect-error"; // Import for safe redirect handling
+import { isRedirectError } from "next/dist/client/components/redirect-error";
+import { signUpSchema, signInSchema, forgotPasswordSchema, resetPasswordSchema } from "@/schema/auth";
 
 // --- Sign Up ---
 export const signUpAction = async (formData: FormData) => {
   try {
-    const email = formData.get("email")?.toString().trim().toLowerCase();
-    const password = formData.get("password")?.toString();
+    // Validate with Zod
+    const parsed = signUpSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
 
-    if (!email || !password) {
-      redirect("/sign-up?error=Email and password are required");
+    if (!parsed.success) {
+      // Return the first validation error
+      const firstError = parsed.error.errors[0]?.message || "Invalid input";
+      return { error: firstError };
     }
 
-    const isValidEmail = (email: string) =>
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-    if (!isValidEmail(email)) {
-      redirect("/sign-up?error=Invalid email format");
-    }
+    const { email, password } = parsed.data;
 
     const supabase = await createClient();
 
@@ -34,7 +35,7 @@ export const signUpAction = async (formData: FormData) => {
     }
 
     // in action.ts ↓
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
@@ -46,6 +47,20 @@ export const signUpAction = async (formData: FormData) => {
     if (error) {
       console.error(error.code + " " + error.message);
       return { error: error.message };
+    }
+
+    // Create a profile row for the new user so downstream queries don't fail
+    if (signUpData?.user) {
+      const { error: profileError } = await supabase
+        .from("profile")
+        .upsert(
+          { user_id: signUpData.user.id },
+          { onConflict: "user_id" }
+        );
+      if (profileError) {
+        console.error("Failed to create profile for new user:", profileError.message);
+        // Non-fatal — the user is still signed up
+      }
     }
 
     return { success: "Thanks for signing up! Check your email for a verification link." };
@@ -61,12 +76,17 @@ export const signUpAction = async (formData: FormData) => {
 // --- Sign In ---
 export const signInAction = async (formData: FormData) => {
   try {
-    const email = formData.get("email")?.toString().trim().toLowerCase();
-    const password = formData.get("password")?.toString();
+    const parsed = signInSchema.safeParse({
+      email: formData.get("email"),
+      password: formData.get("password"),
+    });
 
-    if (!email || !password) {
-      redirect("/sign-in?error=Email and password are required");
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]?.message || "Invalid input";
+      redirect(`/sign-in?error=${encodeURIComponent(firstError)}`);
     }
+
+    const { email, password } = parsed.data;
 
     const supabase = await createClient();
 
@@ -110,11 +130,16 @@ export const signInAction = async (formData: FormData) => {
 // --- Forgot Password ---
 export const forgotPasswordAction = async (formData: FormData) => {
   try {
-    const email = formData.get("email")?.toString().trim().toLowerCase();
+    const parsed = forgotPasswordSchema.safeParse({
+      email: formData.get("email"),
+    });
 
-    if (!email) {
-      redirect("/forgot-password?error=Email is required");
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]?.message || "Invalid input";
+      redirect(`/forgot-password?error=${encodeURIComponent(firstError)}`);
     }
+
+    const { email } = parsed.data;
 
     const supabase = await createClient();
     const headersList = await headers();
@@ -148,18 +173,19 @@ export const forgotPasswordAction = async (formData: FormData) => {
 // --- Reset Password ---
 export const resetPasswordAction = async (formData: FormData) => {
   try {
-    const password = formData.get("password")?.toString();
-    const confirmPassword = formData.get("confirmPassword")?.toString();
+    const parsed = resetPasswordSchema.safeParse({
+      password: formData.get("password"),
+      confirmPassword: formData.get("confirmPassword"),
+    });
 
-    if (!password || !confirmPassword) {
+    if (!parsed.success) {
+      const firstError = parsed.error.errors[0]?.message || "Invalid input";
       redirect(
-        "/protected/reset-password?error=Password and confirm password are required"
+        `/protected/reset-password?error=${encodeURIComponent(firstError)}`
       );
     }
 
-    if (password !== confirmPassword) {
-      redirect("/protected/reset-password?error=Passwords do not match");
-    }
+    const { password } = parsed.data;
 
     const supabase = await createClient();
 

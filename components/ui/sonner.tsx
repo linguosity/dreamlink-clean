@@ -12,6 +12,7 @@ export function Toaster({ ...props }: ToasterProps) {
   return (
     <Sonner
       theme={theme as ToasterProps["theme"]}
+      position="bottom-right"
       className="toaster group"
       toastOptions={{
         // make each toast a white card with rounded corners & shadow,
@@ -30,8 +31,8 @@ export function Toaster({ ...props }: ToasterProps) {
           cancelButton:
             "text-gray-400 hover:text-gray-600",
         },
-        // never auto-dismiss—stay until user closes it
-        duration: Infinity,
+        // auto-dismiss after 8 seconds (long enough to read, short enough to not block)
+        duration: 8000,
         // show a close (×) button by default
         closeButton: true,
       }}
